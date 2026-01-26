@@ -231,23 +231,15 @@ Context:
 
 STRICT ANALYTICAL RULES:
 1. **Detect Shape**: Based on the data result, determine the optimal visualization:
-   - **Line Chart**: Use if 'Period', 'Date', or 'Time' columns exist for trend analysis.
-   - **Scatter Plot**: Use if columns are continuous numeric values and user asks for correlation/relationship.
-   - **Histogram**: Use if data contains 'Bin' and 'Freq' columns from a distribution analysis.
-   - **Bar Chart**: Use for categorical comparisons (e.g., Top N categories).
+   - **Line Chart**: Use if 'Period', 'Date', or 'Time' columns exist.
+   - **Scatter Plot**: Use if columns are continuous numeric values.
+   - **Histogram**: Use if data contains Bins/Frequency.
+   - **Bar Chart**: Use for categorical comparisons.
 
-2. **Source of Truth**: The provided 'Aggregated Data Result' is ALREADY optimized and aggregated. Do NOT ask the developer to aggregate it again.
-3. **STRICT AXIS PARITY**:
-   - X-Axis: Must use the primary grouping column EXACTLY as it appears in the CSV header.
-   - Y-Axis: Must use the metric column EXACTLY as it appears in the CSV header.
-   - **MANDATE**: Do NOT invent, simplify, or "beautify" the column names. Use the CSV headers as the ONLY source of truth for axis titles and labels.
-4. **Professionalism**: Instruction must include mandatory features like exact axis titles from the CSV, responsive scaling, and a business-professional color palette.
-
-Your Design Prompt must include:
-1. The exact Chart Type to use.
-2. Which specific columns (using exact CSV headers) map to X and Y.
-3. Technical formatting requirements (e.g., date formatting, bin range labeling).
-4. MANDATE: Build EXCLUSIVELY ONE chart following the provided data exactly.
+2. **Axis Mapping**: 
+   - Identify the exact X and Y column names from the CSV.
+   - For Scatter Plots, ensure both columns are numeric.
+3. **MANDATE**: Build EXCLUSIVELY ONE chart following the provided data exactly.
 
 Output only the PROMPT text.
 """
@@ -274,15 +266,26 @@ def generate_graph_from_design(design_prompt, context_str, api_key):
 Your goal is to write a SINGLE, self-contained HTML file (using Tailwind and Plotly.js or Chart.js) that visualizes the provided data with 100% parity.
 
 STRICT TECHNICAL RULES: 
-1. **DATA SOURCE**: The 'DATA CONTEXT' is a final CSV table. You MUST parse this CSV directly into a JS array of objects and use it for the chart.
+1. **DATA SOURCE**: The 'DATA CONTEXT' is a final CSV table. You MUST embed this CSV string into a variable and parse it into an array of objects.
 2. **ENGINE SELECTION**: 
-   - Use **Plotly.js** (CDN) for Scatter Plots, Histograms, and complex Time-Series.
-   - Use **Chart.js** (CDN) for simple Bar or Line charts.
-3. **STRICT AXIS TITLES**: 
-   - Axis Titles: You MUST label both X and Y axes using the EXACT column header strings from the CSV. Do NOT change casing or underscores.
-   - Tooltips: Enable rich tooltips showing exact values and the literal column names.
-4. **NO AGGREGATION**: The data is already aggregated. Just map the columns to the chart axes.
-5. **AESTHETICS**: White background (#ffffff), zero border, and responsive sizing.
+   - Use **Plotly.js** (https://cdn.plot.ly/plotly-2.24.1.min.js) for Scatter, Histograms, and complex Time-Series.
+   - Use **Chart.js** (https://cdn.jsdelivr.net/npm/chart.js) for simple Bar or Line charts.
+3. **FAIL-SAFE PARSING**: You MUST include this helper function in your script:
+   ```javascript
+   function parseCSV(csv) {
+     const lines = csv.trim().split('\\n');
+     const headers = lines[0].split(',');
+     return lines.slice(1).map(line => {
+       const values = line.split(',');
+       return headers.reduce((obj, header, i) => {
+         obj[header.trim()] = isNaN(values[i]) ? values[i].trim() : parseFloat(values[i]);
+         return obj;
+       }, {});
+     });
+   }
+   ```
+4. **STRICT AXIS TITLES**: Label X and Y axes using EXACT column headers from the CSV.
+5. **DOM READY**: Wrap everything in `document.addEventListener('DOMContentLoaded', ... )`.
 
 Return ONLY the raw HTML code block. No explanations.
 """
@@ -300,10 +303,14 @@ Generate the full HTML code now.
         response = llm.invoke(messages)
         html_code = response.content.strip()
         
-        # Cleanup
-        if html_code.startswith("```html"): html_code = html_code[7:]
-        elif html_code.startswith("```"): html_code = html_code[3:]
-        if html_code.endswith("```"): html_code = html_code[:-3]
+        # Robust Cleanup using regex
+        import re
+        html_match = re.search(r'```html\n(.*?)```', html_code, re.DOTALL)
+        if not html_match:
+            html_match = re.search(r'```(.*?)```', html_code, re.DOTALL)
+        
+        if html_match:
+            html_code = html_match.group(1).strip()
         
         return html_code
     except Exception as e:
