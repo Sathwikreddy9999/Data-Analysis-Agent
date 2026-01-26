@@ -5,7 +5,6 @@ import os
 import io
 import sys
 import re
-import math
 import streamlit.components.v1 as components
 import statsmodels.api as sm
 from statsmodels.multivariate.manova import MANOVA
@@ -22,27 +21,7 @@ from tabulate import tabulate
 import xgboost as xgb
 import lightgbm as lgb
 from langchain_core.tools import tool
-try:
-    from langchain.agents import AgentExecutor
-except ImportError:
-    # Final fallback if langchain.agents is missing
-    AgentExecutor = None
-
-try:
-    from langchain.agents import create_react_agent
-except ImportError:
-    try:
-        from langchain.agents.react.base import create_react_agent
-    except ImportError:
-        def create_react_agent(*args, **kwargs): return None
-
-try:
-    from langchain.agents import create_json_chat_agent
-except ImportError:
-    try:
-        from langchain.agents.json_chat.base import create_json_chat_agent
-    except ImportError:
-        def create_json_chat_agent(*args, **kwargs): return None
+from langchain.agents import AgentExecutor, create_json_chat_agent, create_react_agent
 from langchain_core.prompts import PromptTemplate
 from style_utils import apply_apple_style
 
@@ -176,16 +155,52 @@ def extract_data_for_graph(user_request, schema_context, api_key):
             from langchain_nvidia_ai_endpoints import ChatNVIDIA
             llm = ChatNVIDIA(model="meta/llama-3.1-70b-instruct", nvidia_api_key=api_key, temperature=0)
 
-        system_prompt = f"""You are a Senior SQL Developer. 
-Your goal is to write a valid SQL query that extracts or aggregates the EXACT data needed for a graph based on the user's request.
+        system_prompt = f"""You are a Senior SQL Data Architect and Statistician.
+Your goal is to write a single, optimized SQL query that analyzes the data and extracts a "Representative Snapshot" (approx. 20 rows) for visualization.
 
 SCHEMA:
 {schema_context}
 
-RULES:
-1. Use the EXACT table names provided in the schema.
-2. Perform all necessary groupings, aggregations, and filtering in SQL.
-3. Return ONLY the raw SQL query. No explanations.
+INSTRUCTIONS:
+
+1. **ANALYZE & DETERMINE STRATEGY**:
+   - Look at the table schema and user request.
+   - Detect the "Shape" of the data:
+     * **Time-Series?** (Look for Date/Time columns).
+     * **High Cardinality?** (Columns with many unique values).
+     * **Distribution?** (Numeric columns needing binning).
+
+2. **GENERATE THE "SMART 20" SNAPSHOT (SQL LOGIC)**:
+   - You must write a query that condenses the data into ~20 representative rows.
+   - **DO NOT** simply use `LIMIT 20` on raw data (unless it's a scatter plot).
+
+   - **IF LINE CHART (Trend Analysis):**
+     * **Strategy:** Aggregate by time bucket.
+     * **SQL:** `SELECT strftime('%Y-%m', date_col) as Period, AVG(value_col) as AvgVal FROM table GROUP BY 1 ORDER BY 1 LIMIT 20;`
+     * (Adjust the date grouping—Day/Month/Year—to get close to 20 points).
+
+   - **IF BAR CHART (Pareto/Comparison):**
+     * **Strategy:** Top 19 Categories + Others.
+     * **SQL:** Use a `CASE` statement or `UNION` if possible. Otherwise, prioritize the Top 20:
+     * `SELECT category_col, SUM(value_col) as Total FROM table GROUP BY 1 ORDER BY 2 DESC LIMIT 20;`
+
+   - **IF HISTOGRAM (Distribution/Skewness):**
+     * **Strategy:** Create pseudo-bins using math.
+     * **SQL:** `SELECT FLOOR(numeric_col / bin_width) * bin_width as Bin, COUNT(*) as Freq FROM table GROUP BY 1 ORDER BY 1;`
+     * (Estimate `bin_width` based on Min/Max logic if possible, e.g., `(Max-Min)/20`).
+
+   - **IF SCATTER PLOT (Correlation):**
+     * **Strategy:** Random Sample or Ordered Limit.
+     * **SQL:** `SELECT x_col, y_col FROM table ORDER BY RANDOM() LIMIT 20;` (Or `LIMIT 100` for better density).
+
+3. **STATISTICAL SUMMARY (Optional Column):**
+   - If the user asks for stats (Mean, Min, Max), include them as window functions or a separate summary row if the SQL dialect permits.
+   - Example: `AVG(val) OVER () as GlobalMean` included in the result columns.
+
+4. **OUTPUT FORMAT**:
+   - Return **ONLY** the raw SQL query.
+   - The query must be valid for **SQLite** (standard ANSI SQL).
+   - Do not use Markdown blocks.
 """
         from langchain_core.messages import HumanMessage, SystemMessage
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"USER REQUEST: {user_request}"}]
@@ -210,25 +225,32 @@ def generate_graph_design_prompt(user_request, context_str, api_key):
             from langchain_nvidia_ai_endpoints import ChatNVIDIA
             llm = ChatNVIDIA(model="meta/llama-3.1-70b-instruct", nvidia_api_key=api_key)
 
-        system_prompt = "You are a Senior Design Architect specializing in Data Visualization."
+        system_prompt = "You are a Senior Design Architect specializing in Expert Data Visualization and Information Design."
         user_prompt = f"""
-Goal: Write a strict, detailed INSTRUCTION PROMPT for a Frontend Developer to build a single high-quality graph.
+Goal: Write a strict, expert-grade INSTRUCTION PROMPT for a Frontend Developer to build a specific high-quality graph.
 
 Context:
 - User Request: {user_request}
-- Aggregated Data Result: {context_str}
+- Aggregated Data Result (Final CSV): {context_str}
 
-STRICT DATA RULES:
-1. **Analyse Results**: Deeply analyse the values and headers in the provided 'Aggregated Data Result'. Use this analysis to judge the best chart type and axis labels.
-2. **Source of Truth**: The provided result IS the exact table you must use. Do NOT suggest any transformations.
-3. **Exact Labeling**: Use the exact column headers for axis labels. (e.g., if header is 'Order_ID', axis MUST be 'Order_ID').
-4. **Precision**: The labels in the chart must perfectly reflect the values in the table.
+STRICT ANALYTICAL RULES:
+1. **Detect Shape**: Based on the data result, determine the optimal visualization:
+   - **Line Chart**: Use if 'Period', 'Date', or 'Time' columns exist for trend analysis.
+   - **Scatter Plot**: Use if columns are continuous numeric values and user asks for correlation/relationship.
+   - **Histogram**: Use if data contains 'Bin' and 'Freq' columns from a distribution analysis.
+   - **Bar Chart**: Use for categorical comparisons (e.g., Top N categories).
+
+2. **Source of Truth**: The provided 'Aggregated Data Result' is ALREADY optimized and aggregated. Do NOT ask the developer to aggregate it again.
+3. **Axis Strategy**:
+   - X-Axis: Must use the primary grouping column (e.g., Period, Category, Bin).
+   - Y-Axis: Must use the value/metric column (e.g., Total, AvgVal, Freq).
+4. **Professionalism**: Instruction must include mandatory features like axis titles, responsive scaling, and a business-professional color palette.
 
 Your Design Prompt must include:
-1. Which specific columns to use for X and Y axes.
-2. A **Comprehensive Statistical Profile** (Mean, Median, Std Dev, IQR).
-3. Professional chart type selection based on data shape.
-4. MANDATE: Instruct the developer to build EXCLUSIVELY ONE chart and embed data provided exactly.
+1. The exact Chart Type to use.
+2. Which specific columns map to X and Y.
+3. Technical formatting requirements (e.g., date formatting, bin range labeling).
+4. MANDATE: Build EXCLUSIVELY ONE chart following the provided data exactly.
 
 Output only the PROMPT text.
 """
@@ -251,17 +273,21 @@ def generate_graph_from_design(design_prompt, context_str, api_key):
             from langchain_nvidia_ai_endpoints import ChatNVIDIA
             llm = ChatNVIDIA(model="meta/llama-3.1-70b-instruct", nvidia_api_key=api_key)
 
-        system_prompt = """You are a Frontend Data Visualization Expert. 
-Your goal is to write a SINGLE, self-contained HTML file (using Tailwind and Chart.js/Plotly) that visualizes data.
+        system_prompt = """You are a Senior Frontend Data Visualization Expert. 
+Your goal is to write a SINGLE, self-contained HTML file (using Tailwind and Plotly.js or Chart.js) that visualizes the provided data with 100% parity.
 
-STRICT RULES: 
-1. **DATA SOURCE**: The provided 'DATA CONTEXT' is a final CSV table. You MUST parse/embed this entire table as a JS object or array and plot it exactly. Do NOT use sample data, random numbers, or placeholders.
-2. **STRICT LABELING**: The labels in your Chart.js/Plotly configuration (x-axis title, y-axis title, legend labels) MUST match the keys in your JS data object exactly as they appear in the CSV headers.
-3. Only one chart. 
-4. Background must be white (#ffffff). 
-5. **MANDATORY**: You MUST include clear labels for both the X and Y axes, using the exact column names from the data.
+STRICT TECHNICAL RULES: 
+1. **DATA SOURCE**: The 'DATA CONTEXT' is a final CSV table. You MUST parse this CSV directly into a JS array of objects and use it for the chart.
+2. **ENGINE SELECTION**: 
+   - Use **Plotly.js** (CDN) for Scatter Plots, Histograms, and complex Time-Series.
+   - Use **Chart.js** (CDN) for simple Bar or Line charts.
+3. **MANDATORY LABELING**: 
+   - Axis Titles: You MUST label both X and Y axes using the exact column names from the CSV.
+   - Tooltips: Enable rich tooltips showing exact values.
+4. **NO AGGREGATION**: The data is already aggregated. Just map the columns to the chart axes.
+5. **AESTHETICS**: White background (#ffffff), zero border, and responsive sizing.
 
-Return ONLY the raw HTML code. Do NOT include explanations.
+Return ONLY the raw HTML code block. No explanations.
 """
         user_prompt = f"""
 DATA CONTEXT:
@@ -599,7 +625,7 @@ def render_analysis_plots():
 # --- Static Content for Walkthrough ---
 MODE_INFO = {
     "SQL Code": {
-        "download_note": "Tip: After the query is generated, you can click the button below to execute it and download the results as a CSV.",
+        "download_note": "💡 **Tip**: After the query is generated, you can click the button below to execute it and download the results as a CSV.",
         "use_cases": [
             "Enter 'Show all columns from orders' to get a clean SELECT query.",
             "Enter 'Join orders with users on userId' to get a relational join query.",
@@ -610,7 +636,7 @@ MODE_INFO = {
         ]
     },
     "Python Code": {
-        "download_note": "Tip: After the code is generated, you can click the button below to run it and download the processed data as a CSV.",
+        "download_note": "💡 **Tip**: After the code is generated, you can click the button below to run it and download the processed data as a CSV.",
         "use_cases": [
             "Enter 'Calculate rolling 7-day average of sales' to get pandas rolling mean code.",
             "Enter 'Handle missing values in price column' to get imputer/fillna code.",
@@ -621,7 +647,7 @@ MODE_INFO = {
         ]
     },
     "R Code": {
-        "download_note": "Tip: After the R code is generated, you can click the button below to perform the operation and download the result as a CSV.",
+        "download_note": "💡 **Tip**: After the R code is generated, you can click the button below to perform the operation and download the result as a CSV.",
         "use_cases": [
             "Enter 'Select columns date and sales' to get dplyr select code.",
             "Enter 'Filter for rows where sales > 100' to get filter() code.",
@@ -659,7 +685,7 @@ def main():
     st.title("Data Analysis Agent")
 
     # --- Quick Start Guide (Always Visible) ---
-    with st.expander("Quick Start Guide", expanded=True):
+    with st.expander("🚀 Quick Start Guide", expanded=True):
         st.markdown("""
         1. **STEP 1:** **Select your Mode** in the sidebar.
         2. **STEP 2:** **Add your Data** (CSV or XLSX) via the uploader in the sidebar.
@@ -679,9 +705,8 @@ def main():
     
     # --- Sidebar ---
     with st.sidebar:
-        # Use st.secrets or environment variables for GitHub pushing
-        # Replace the string below with your own key or use: st.session_state.api_key = st.secrets["NVIDIA_API_KEY"]
-        default_key = "nvapi-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+        # User requested to use NVIDIA API key
+        default_key = "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"
         # Secure API Key Loading
         api_key = os.getenv("OPENROUTER_API_KEY", default_key)
         st.session_state.api_key = api_key
@@ -713,7 +738,7 @@ def main():
                     # Store onboarding report as a message
                     st.session_state.messages.append({
                         "role": "assistant", 
-                        "content": "### Data Onboarding Report\n\nYour data is loaded and analyzed below.",
+                        "content": "### 📊 Data Onboarding Report\n\nYour data is loaded and analyzed below.",
                         "is_onboarding": True,
                         "summaries": summaries
                     })
@@ -732,7 +757,7 @@ def main():
         st.divider()
         
         # Stop & Reset Button
-        if st.button("Stop & Reset", type="secondary", use_container_width=True):
+        if st.button("🛑 Stop & Reset", type="secondary", use_container_width=True):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.rerun()
@@ -757,7 +782,7 @@ def main():
             if msg["role"] == "assistant" and msg.get("is_onboarding"):
                 summaries = msg.get("summaries", {})
                 for name, df in st.session_state.dfs.items():
-                    st.write(f"#### Snapshot: `{name}`")
+                    st.write(f"#### 🔎 Snapshot: `{name}`")
                     st.dataframe(df.head(5), use_container_width=True)
                     summary = summaries.get(name) or summaries.get(name.replace("df_", "")) or next(iter(summaries.values())) if summaries else "Summary unavailable."
                     st.write(f"**AI Insights for {name}:**")
@@ -767,7 +792,7 @@ def main():
             # 2. Results CSV Download
             if "result_csv_data" in msg:
                 st.download_button(
-                    label="Download Results (CSV)",
+                    label="📥 Download Results (CSV)",
                     data=msg["result_csv_data"],
                     file_name="analysis_result.csv",
                     mime="text/csv",
@@ -780,7 +805,7 @@ def main():
             if "plot_html" in msg:
                 components.html(msg["plot_html"], height=500, scrolling=True)
                 st.download_button(
-                    label="Download Chart (HTML)",
+                    label="📥 Download Chart (HTML)",
                     data=msg["plot_html"],
                     file_name="visualization.html",
                     mime="text/html",
@@ -877,7 +902,7 @@ def main():
                             st.markdown(output)
                             components.html(html_plot, height=500, scrolling=True)
                             st.download_button(
-                                label="Download Chart (HTML)",
+                                label="📥 Download Chart (HTML)",
                                 data=html_plot,
                                 file_name="visualization.html",
                                 mime="text/html",
@@ -950,7 +975,7 @@ def main():
         st.divider()
         with open("analysis_output.csv", "rb") as f:
             st.download_button(
-                label="Download Last SQL Result (CSV)",
+                label="📥 Download Last SQL Result (CSV)",
                 data=f,
                 file_name="analysis_result.csv",
                 mime="text/csv",
@@ -961,7 +986,7 @@ def main():
     # Show "Perform" button for SQL/Python/R modes that need secondary execution
     if agent_mode in ["SQL Code", "Python Code", "R Code"] and "last_prompt" in st.session_state:
         st.divider()
-        if st.button("Perform Operation and Generate CSV", type="secondary", use_container_width=True):
+        if st.button("🚀 Perform Operation and Generate CSV", type="secondary", use_container_width=True):
             with st.spinner("Executing and Generating Results..."):
                 try:
                     # Re-Init resources
@@ -1010,7 +1035,7 @@ def main():
                     8. **EXECUTIVE SUMMARY**: Format all your `print()` outputs as a professional, structured **Executive Summary** using Markdown. 
                        - Use headers (###), bold text, and Markdown tables for technical metrics.
                        - **LAYMAN EXPLANATIONS**: For every technical metric (e.g., Accuracy, R2, ROC AUC), you MUST include a one-sentence layman explanation (e.g., "This means the model correctly guesses 85% of the cases").
-                       - **PLAIN LANGUAGE INSIGHTS**: Conclude with a section titled "### Interpretation & Key Insights" containing 3-4 simple bullet points that explain what the results mean for a non-technical person (the "so what").
+                       - **PLAIN LANGUAGE INSIGHTS**: Conclude with a section titled "### 💡 Interpretation & Key Insights" containing 3-4 simple bullet points that explain what the results mean for a non-technical person (the "so what").
                     9. **OUTPUT**: Save result to 'analysis_output.csv' using `to_csv(index=False)`.
                     10. Return ONLY valid Python code. No markdown.
                     """
@@ -1043,7 +1068,7 @@ def main():
                                 result_df = execute_sql_query(code, st.session_state.dfs)
                                 result_df.to_csv("analysis_output.csv", index=False)
                                 
-                                result_text = "### SQL Query Result Preview\n"
+                                result_text = "### 📊 SQL Query Result Preview\n"
                                 if not result_df.empty:
                                     result_text += result_df.head(10).to_markdown(index=False)
                                 else:
@@ -1096,7 +1121,7 @@ def main():
                         
                         # Display Text Results
                         if result_text.strip():
-                            st.subheader("Executive Summary")
+                            st.subheader("📊 Executive Summary")
                             st.markdown(result_text)
                             
                             # Immediate Download Button after summary
@@ -1105,7 +1130,7 @@ def main():
                                 with open("analysis_output.csv", "rb") as f:
                                     csv_data = f.read()
                                     st.download_button(
-                                        label="Download Results (CSV)",
+                                        label="📥 Download Results (CSV)",
                                         data=csv_data,
                                         file_name="analysis_result.csv",
                                         mime="text/csv",
