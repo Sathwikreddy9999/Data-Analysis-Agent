@@ -690,7 +690,12 @@ def main():
                     summaries = generate_combined_insights(st.session_state.dfs, api_key)
                     
                     # Store onboarding report as a message
+                    st.session_state.messages.append({
+                        "role": "assistant", 
                         "content": "### Data Onboarding Report\n\nYour data is loaded and analyzed below.",
+                        "is_onboarding": True,
+                        "summaries": summaries
+                    })
         else:
             st.session_state.dfs = {}
 
