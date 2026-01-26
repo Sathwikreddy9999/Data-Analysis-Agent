@@ -8,9 +8,10 @@ scikit-learn
 xgboost
 lightgbm
 tabulate
-langchain
+langchain>=0.2.0
+langchain-core>=0.2.0
+langchain-community>=0.2.0
 langchain-nvidia-ai-endpoints
-langchain-community
 langchain-openai
 python-dotenv
 rapidfuzz
