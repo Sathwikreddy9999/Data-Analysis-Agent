@@ -578,7 +578,7 @@ def render_analysis_plots():
 # --- Static Content for Walkthrough ---
 MODE_INFO = {
     "SQL Code": {
-        "download_note": "💡 **Tip**: After the query is generated, you can click the button below to execute it and download the results as a CSV.",
+        "download_note": "Tip: After the query is generated, you can click the button below to execute it and download the results as a CSV.",
         "use_cases": [
             "Enter 'Show all columns from orders' to get a clean SELECT query.",
             "Enter 'Join orders with users on userId' to get a relational join query.",
@@ -589,7 +589,7 @@ MODE_INFO = {
         ]
     },
     "Python Code": {
-        "download_note": "💡 **Tip**: After the code is generated, you can click the button below to run it and download the processed data as a CSV.",
+        "download_note": "Tip: After the code is generated, you can click the button below to run it and download the processed data as a CSV.",
         "use_cases": [
             "Enter 'Calculate rolling 7-day average of sales' to get pandas rolling mean code.",
             "Enter 'Handle missing values in price column' to get imputer/fillna code.",
@@ -600,7 +600,7 @@ MODE_INFO = {
         ]
     },
     "R Code": {
-        "download_note": "💡 **Tip**: After the R code is generated, you can click the button below to perform the operation and download the result as a CSV.",
+        "download_note": "Tip: After the R code is generated, you can click the button below to perform the operation and download the result as a CSV.",
         "use_cases": [
             "Enter 'Select columns date and sales' to get dplyr select code.",
             "Enter 'Filter for rows where sales > 100' to get filter() code.",
@@ -638,7 +638,7 @@ def main():
     st.title("Data Analysis Agent")
 
     # --- Quick Start Guide (Always Visible) ---
-    with st.expander("🚀 Quick Start Guide", expanded=True):
+    with st.expander("Quick Start Guide", expanded=True):
         st.markdown("""
         1. **STEP 1:** **Select your Mode** in the sidebar.
         2. **STEP 2:** **Add your Data** (CSV or XLSX) via the uploader in the sidebar.
@@ -690,12 +690,7 @@ def main():
                     summaries = generate_combined_insights(st.session_state.dfs, api_key)
                     
                     # Store onboarding report as a message
-                    st.session_state.messages.append({
-                        "role": "assistant", 
-                        "content": "### 📊 Data Onboarding Report\n\nYour data is loaded and analyzed below.",
-                        "is_onboarding": True,
-                        "summaries": summaries
-                    })
+                        "content": "### Data Onboarding Report\n\nYour data is loaded and analyzed below.",
         else:
             st.session_state.dfs = {}
 
@@ -711,7 +706,7 @@ def main():
         st.divider()
         
         # Stop & Reset Button
-        if st.button("🛑 Stop & Reset", type="secondary", use_container_width=True):
+        if st.button("Stop & Reset", type="secondary", use_container_width=True):
             for key in list(st.session_state.keys()):
                 del st.session_state[key]
             st.rerun()
@@ -736,7 +731,7 @@ def main():
             if msg["role"] == "assistant" and msg.get("is_onboarding"):
                 summaries = msg.get("summaries", {})
                 for name, df in st.session_state.dfs.items():
-                    st.write(f"#### 🔎 Snapshot: `{name}`")
+                    st.write(f"#### Snapshot: `{name}`")
                     st.dataframe(df.head(5), use_container_width=True)
                     summary = summaries.get(name) or summaries.get(name.replace("df_", "")) or next(iter(summaries.values())) if summaries else "Summary unavailable."
                     st.write(f"**AI Insights for {name}:**")
@@ -746,7 +741,7 @@ def main():
             # 2. Results CSV Download
             if "result_csv_data" in msg:
                 st.download_button(
-                    label="📥 Download Results (CSV)",
+                    label="Download Results (CSV)",
                     data=msg["result_csv_data"],
                     file_name="analysis_result.csv",
                     mime="text/csv",
@@ -759,7 +754,7 @@ def main():
             if "plot_html" in msg:
                 components.html(msg["plot_html"], height=500, scrolling=True)
                 st.download_button(
-                    label="📥 Download Chart (HTML)",
+                    label="Download Chart (HTML)",
                     data=msg["plot_html"],
                     file_name="visualization.html",
                     mime="text/html",
@@ -856,7 +851,7 @@ def main():
                             st.markdown(output)
                             components.html(html_plot, height=500, scrolling=True)
                             st.download_button(
-                                label="📥 Download Chart (HTML)",
+                                label="Download Chart (HTML)",
                                 data=html_plot,
                                 file_name="visualization.html",
                                 mime="text/html",
@@ -929,7 +924,7 @@ def main():
         st.divider()
         with open("analysis_output.csv", "rb") as f:
             st.download_button(
-                label="📥 Download Last SQL Result (CSV)",
+                label="Download Last SQL Result (CSV)",
                 data=f,
                 file_name="analysis_result.csv",
                 mime="text/csv",
@@ -940,7 +935,7 @@ def main():
     # Show "Perform" button for SQL/Python/R modes that need secondary execution
     if agent_mode in ["SQL Code", "Python Code", "R Code"] and "last_prompt" in st.session_state:
         st.divider()
-        if st.button("🚀 Perform Operation and Generate CSV", type="secondary", use_container_width=True):
+        if st.button("Perform Operation and Generate CSV", type="secondary", use_container_width=True):
             with st.spinner("Executing and Generating Results..."):
                 try:
                     # Re-Init resources
@@ -989,7 +984,7 @@ def main():
                     8. **EXECUTIVE SUMMARY**: Format all your `print()` outputs as a professional, structured **Executive Summary** using Markdown. 
                        - Use headers (###), bold text, and Markdown tables for technical metrics.
                        - **LAYMAN EXPLANATIONS**: For every technical metric (e.g., Accuracy, R2, ROC AUC), you MUST include a one-sentence layman explanation (e.g., "This means the model correctly guesses 85% of the cases").
-                       - **PLAIN LANGUAGE INSIGHTS**: Conclude with a section titled "### 💡 Interpretation & Key Insights" containing 3-4 simple bullet points that explain what the results mean for a non-technical person (the "so what").
+                       - **PLAIN LANGUAGE INSIGHTS**: Conclude with a section titled "### Interpretation & Key Insights" containing 3-4 simple bullet points that explain what the results mean for a non-technical person (the "so what").
                     9. **OUTPUT**: Save result to 'analysis_output.csv' using `to_csv(index=False)`.
                     10. Return ONLY valid Python code. No markdown.
                     """
@@ -1022,7 +1017,7 @@ def main():
                                 result_df = execute_sql_query(code, st.session_state.dfs)
                                 result_df.to_csv("analysis_output.csv", index=False)
                                 
-                                result_text = "### 📊 SQL Query Result Preview\n"
+                                result_text = "### SQL Query Result Preview\n"
                                 if not result_df.empty:
                                     result_text += result_df.head(10).to_markdown(index=False)
                                 else:
@@ -1075,7 +1070,7 @@ def main():
                         
                         # Display Text Results
                         if result_text.strip():
-                            st.subheader("📊 Executive Summary")
+                            st.subheader("Executive Summary")
                             st.markdown(result_text)
                             
                             # Immediate Download Button after summary
@@ -1084,7 +1079,7 @@ def main():
                                 with open("analysis_output.csv", "rb") as f:
                                     csv_data = f.read()
                                     st.download_button(
-                                        label="📥 Download Results (CSV)",
+                                        label="Download Results (CSV)",
                                         data=csv_data,
                                         file_name="analysis_result.csv",
                                         mime="text/csv",
