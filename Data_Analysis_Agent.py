@@ -23,16 +23,25 @@ import xgboost as xgb
 import lightgbm as lgb
 from langchain_core.tools import tool
 try:
-    from langchain.agents import AgentExecutor, create_json_chat_agent, create_react_agent
-except ImportError:
-    # Older versions or specific path requirements
     from langchain.agents import AgentExecutor
+except ImportError:
+    # Final fallback if langchain.agents is missing
+    AgentExecutor = None
+
+try:
+    from langchain.agents import create_react_agent
+except ImportError:
     try:
         from langchain.agents.react.base import create_react_agent
+    except ImportError:
+        def create_react_agent(*args, **kwargs): return None
+
+try:
+    from langchain.agents import create_json_chat_agent
+except ImportError:
+    try:
         from langchain.agents.json_chat.base import create_json_chat_agent
     except ImportError:
-        # Final fallback
-        def create_react_agent(*args, **kwargs): return None
         def create_json_chat_agent(*args, **kwargs): return None
 from langchain_core.prompts import PromptTemplate
 from style_utils import apply_apple_style
