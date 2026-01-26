@@ -176,26 +176,22 @@ INSTRUCTIONS:
 
    - **IF LINE CHART (Trend Analysis):**
      * **Strategy:** Aggregate by time bucket.
-     * **SQL:** `SELECT strftime('%Y-%m', date_col) as Period, AVG(value_col) as AvgVal FROM table GROUP BY 1 ORDER BY 1 LIMIT 20;`
-     * (Adjust the date grouping—Day/Month/Year—to get close to 20 points).
+     * **SQL:** Use clear aliases for columns (e.g., `SELECT strftime('%Y-%m', date_col) as Period, AVG(value_col) as Average_Value ...`). The aliases you choose will be the DIRECT labels for the graph axes.
 
    - **IF BAR CHART (Pareto/Comparison):**
      * **Strategy:** Top 19 Categories + Others.
-     * **SQL:** Use a `CASE` statement or `UNION` if possible. Otherwise, prioritize the Top 20:
-     * `SELECT category_col, SUM(value_col) as Total FROM table GROUP BY 1 ORDER BY 2 DESC LIMIT 20;`
+     * **SQL:** Use professional aliases for metrics (e.g., `SUM(value_col) as Total_Amount`).
+     * `SELECT category_col as Category, SUM(value_col) as Total_Amount FROM table GROUP BY 1 ORDER BY 2 DESC LIMIT 20;`
 
    - **IF HISTOGRAM (Distribution/Skewness):**
      * **Strategy:** Create pseudo-bins using math.
-     * **SQL:** `SELECT FLOOR(numeric_col / bin_width) * bin_width as Bin, COUNT(*) as Freq FROM table GROUP BY 1 ORDER BY 1;`
-     * (Estimate `bin_width` based on Min/Max logic if possible, e.g., `(Max-Min)/20`).
+     * **SQL:** `SELECT FLOOR(numeric_col / bin_width) * bin_width as Numeric_Bin, COUNT(*) as Frequency FROM table GROUP BY 1 ORDER BY 1;`
 
    - **IF SCATTER PLOT (Correlation):**
      * **Strategy:** Random Sample or Ordered Limit.
-     * **SQL:** `SELECT x_col, y_col FROM table ORDER BY RANDOM() LIMIT 20;` (Or `LIMIT 100` for better density).
+     * **SQL:** `SELECT x_col as X_Axis_Variable, y_col as Y_Axis_Variable FROM table ORDER BY RANDOM() LIMIT 20;`
 
-3. **STATISTICAL SUMMARY (Optional Column):**
-   - If the user asks for stats (Mean, Min, Max), include them as window functions or a separate summary row if the SQL dialect permits.
-   - Example: `AVG(val) OVER () as GlobalMean` included in the result columns.
+3. **MANDATORY ALIASES**: Every column in the `SELECT` statement must have a clear, human-readable SQL alias (using underscores instead of spaces). These aliases are the SOURCE OF TRUTH for all graph labels. Do not use generic names like `col1`, `val1`.
 
 4. **OUTPUT FORMAT**:
    - Return **ONLY** the raw SQL query.
@@ -241,14 +237,15 @@ STRICT ANALYTICAL RULES:
    - **Bar Chart**: Use for categorical comparisons (e.g., Top N categories).
 
 2. **Source of Truth**: The provided 'Aggregated Data Result' is ALREADY optimized and aggregated. Do NOT ask the developer to aggregate it again.
-3. **Axis Strategy**:
-   - X-Axis: Must use the primary grouping column (e.g., Period, Category, Bin).
-   - Y-Axis: Must use the value/metric column (e.g., Total, AvgVal, Freq).
-4. **Professionalism**: Instruction must include mandatory features like axis titles, responsive scaling, and a business-professional color palette.
+3. **STRICT AXIS PARITY**:
+   - X-Axis: Must use the primary grouping column EXACTLY as it appears in the CSV header.
+   - Y-Axis: Must use the metric column EXACTLY as it appears in the CSV header.
+   - **MANDATE**: Do NOT invent, simplify, or "beautify" the column names. Use the CSV headers as the ONLY source of truth for axis titles and labels.
+4. **Professionalism**: Instruction must include mandatory features like exact axis titles from the CSV, responsive scaling, and a business-professional color palette.
 
 Your Design Prompt must include:
 1. The exact Chart Type to use.
-2. Which specific columns map to X and Y.
+2. Which specific columns (using exact CSV headers) map to X and Y.
 3. Technical formatting requirements (e.g., date formatting, bin range labeling).
 4. MANDATE: Build EXCLUSIVELY ONE chart following the provided data exactly.
 
@@ -281,9 +278,9 @@ STRICT TECHNICAL RULES:
 2. **ENGINE SELECTION**: 
    - Use **Plotly.js** (CDN) for Scatter Plots, Histograms, and complex Time-Series.
    - Use **Chart.js** (CDN) for simple Bar or Line charts.
-3. **MANDATORY LABELING**: 
-   - Axis Titles: You MUST label both X and Y axes using the exact column names from the CSV.
-   - Tooltips: Enable rich tooltips showing exact values.
+3. **STRICT AXIS TITLES**: 
+   - Axis Titles: You MUST label both X and Y axes using the EXACT column header strings from the CSV. Do NOT change casing or underscores.
+   - Tooltips: Enable rich tooltips showing exact values and the literal column names.
 4. **NO AGGREGATION**: The data is already aggregated. Just map the columns to the chart axes.
 5. **AESTHETICS**: White background (#ffffff), zero border, and responsive sizing.
 
