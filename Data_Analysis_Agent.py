@@ -85,12 +85,13 @@ def generate_interactive_html(user_request: str) -> str:
             context_str += f"SAMPLE DATA (CSV):\n{head_csv}\n"
         
         # 2. Init LLM
-        if api_key.startswith("sk-or-"):
+        graph_api_key = os.getenv("GRAPH_API_KEY", "your-graph-api-key-here")
+        if graph_api_key.startswith("sk-or-"):
             from langchain_openai import ChatOpenAI
-            llm = ChatOpenAI(model="nvidia/nemotron-3-nano-30b-a3b:free", api_key=api_key, base_url="https://openrouter.ai/api/v1", temperature=0.2)
+            llm = ChatOpenAI(model="google/gemini-3-flash-preview", api_key=graph_api_key, base_url="https://openrouter.ai/api/v1", temperature=0.2)
         else:
-            from langchain_nvidia_ai_endpoints import ChatNVIDIA
-            llm = ChatNVIDIA(model="meta/llama-3.1-70b-instruct", nvidia_api_key=api_key)
+            from langchain_openai import ChatOpenAI
+            llm = ChatOpenAI(model="google/gemini-3-flash-preview", api_key=graph_api_key)
 
         # 3. Sophisticated Designer-Coder Prompt
         system_prompt = """You are a Senior Design Architect & Frontend Visualization Expert.
@@ -143,178 +144,8 @@ def generate_interactive_html(user_request: str) -> str:
     except Exception as e:
         return f"HTML Generation failed: {e}"
 
-def extract_data_for_graph(user_request, schema_context, api_key):
-    """
-    Step 1: SQL Expert - Generates and runs a SQL query to aggregate the full dataset for the graph.
-    """
-    try:
-        if api_key.startswith("sk-or-"):
-            from langchain_openai import ChatOpenAI
-            llm = ChatOpenAI(model="meta-llama/llama-3.1-70b-instruct", api_key=api_key, base_url="https://openrouter.ai/api/v1", temperature=0)
-        else:
-            from langchain_nvidia_ai_endpoints import ChatNVIDIA
-            llm = ChatNVIDIA(model="meta/llama-3.1-70b-instruct", nvidia_api_key=api_key, temperature=0)
 
-        system_prompt = f"""You are a Senior SQL Data Architect and Statistician.
-Your goal is to write a single, optimized SQL query that analyzes the data and extracts a "Representative Snapshot" (approx. 20 rows) for visualization.
 
-SCHEMA:
-{schema_context}
-
-INSTRUCTIONS:
-
-1. **ANALYZE & DETERMINE STRATEGY**:
-   - Look at the table schema and user request.
-   - Detect the "Shape" of the data:
-     * **Time-Series?** (Look for Date/Time columns).
-     * **High Cardinality?** (Columns with many unique values).
-     * **Distribution?** (Numeric columns needing binning).
-
-2. **GENERATE THE "SMART 20" SNAPSHOT (SQL LOGIC)**:
-   - You must write a query that condenses the data into ~20 representative rows.
-   - **DO NOT** simply use `LIMIT 20` on raw data (unless it's a scatter plot).
-
-   - **IF LINE CHART (Trend Analysis):**
-     * **Strategy:** Aggregate by time bucket.
-     * **SQL:** Use clear aliases for columns (e.g., `SELECT strftime('%Y-%m', date_col) as Period, AVG(value_col) as Average_Value ...`). The aliases you choose will be the DIRECT labels for the graph axes.
-
-   - **IF BAR CHART (Pareto/Comparison):**
-     * **Strategy:** Top 19 Categories + Others.
-     * **SQL:** Use professional aliases for metrics (e.g., `SUM(value_col) as Total_Amount`).
-     * `SELECT category_col as Category, SUM(value_col) as Total_Amount FROM table GROUP BY 1 ORDER BY 2 DESC LIMIT 20;`
-
-   - **IF HISTOGRAM (Distribution/Skewness):**
-     * **Strategy:** Create pseudo-bins using math.
-     * **SQL:** `SELECT FLOOR(numeric_col / bin_width) * bin_width as Numeric_Bin, COUNT(*) as Frequency FROM table GROUP BY 1 ORDER BY 1;`
-
-   - **IF SCATTER PLOT (Correlation):**
-     * **Strategy:** Random Sample or Ordered Limit.
-     * **SQL:** `SELECT x_col as X_Axis_Variable, y_col as Y_Axis_Variable FROM table ORDER BY RANDOM() LIMIT 20;`
-
-3. **MANDATORY ALIASES**: Every column in the `SELECT` statement must have a clear, human-readable SQL alias (using underscores instead of spaces). These aliases are the SOURCE OF TRUTH for all graph labels. Do not use generic names like `col1`, `val1`.
-
-4. **OUTPUT FORMAT**:
-   - Return **ONLY** the raw SQL query.
-   - The query must be valid for **SQLite** (standard ANSI SQL).
-   - Do not use Markdown blocks.
-"""
-        from langchain_core.messages import HumanMessage, SystemMessage
-        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": f"USER REQUEST: {user_request}"}]
-        response = llm.invoke(messages)
-        sql_query = response.content.replace("```sql", "").replace("```", "").strip()
-        
-        # Execution using existing SQLite engine
-        result_df = execute_sql_query(sql_query, st.session_state.dfs)
-        return result_df.to_csv(index=False)
-    except Exception as e:
-        return f"Extraction failed: {e}"
-
-def generate_graph_design_prompt(user_request, context_str, api_key):
-    """
-    Step 1: Architect - Analyzes request and context to create a design specification.
-    """
-    try:
-        if api_key.startswith("sk-or-"):
-            from langchain_openai import ChatOpenAI
-            llm = ChatOpenAI(model="meta-llama/llama-3.1-70b-instruct", api_key=api_key, base_url="https://openrouter.ai/api/v1", temperature=0.3)
-        else:
-            from langchain_nvidia_ai_endpoints import ChatNVIDIA
-            llm = ChatNVIDIA(model="meta/llama-3.1-70b-instruct", nvidia_api_key=api_key)
-
-        system_prompt = "You are a Senior Design Architect specializing in Expert Data Visualization and Information Design."
-        user_prompt = f"""
-Goal: Write a strict, expert-grade INSTRUCTION PROMPT for a Frontend Developer to build a specific high-quality graph.
-
-Context:
-- User Request: {user_request}
-- Aggregated Data Result (Final CSV): {context_str}
-
-STRICT ANALYTICAL RULES:
-1. **Detect Shape**: Based on the data result, determine the optimal visualization:
-   - **Line Chart**: Use if 'Period', 'Date', or 'Time' columns exist.
-   - **Scatter Plot**: Use if columns are continuous numeric values.
-   - **Histogram**: Use if data contains Bins/Frequency.
-   - **Bar Chart**: Use for categorical comparisons.
-
-2. **Axis Mapping**: 
-   - Identify the exact X and Y column names from the CSV.
-   - For Scatter Plots, ensure both columns are numeric.
-3. **MANDATE**: Build EXCLUSIVELY ONE chart following the provided data exactly.
-
-Output only the PROMPT text.
-"""
-        from langchain_core.messages import HumanMessage, SystemMessage
-        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
-        response = llm.invoke(messages)
-        return response.content
-    except Exception as e:
-        return f"Design generation failed: {e}"
-
-def generate_graph_from_design(design_prompt, context_str, api_key):
-    """
-    Step 2: Coder - Generates HTML code from the architect's design prompt.
-    """
-    try:
-        if api_key.startswith("sk-or-"):
-            from langchain_openai import ChatOpenAI
-            llm = ChatOpenAI(model="meta-llama/llama-3.1-70b-instruct", api_key=api_key, base_url="https://openrouter.ai/api/v1", temperature=0.2)
-        else:
-            from langchain_nvidia_ai_endpoints import ChatNVIDIA
-            llm = ChatNVIDIA(model="meta/llama-3.1-70b-instruct", nvidia_api_key=api_key)
-
-        system_prompt = """You are a Senior Frontend Data Visualization Expert. 
-Your goal is to write a SINGLE, self-contained HTML file (using Tailwind and Plotly.js or Chart.js) that visualizes the provided data with 100% parity.
-
-STRICT TECHNICAL RULES: 
-1. **DATA SOURCE**: The 'DATA CONTEXT' is a final CSV table. You MUST embed this CSV string into a variable and parse it into an array of objects.
-2. **ENGINE SELECTION**: 
-   - Use **Plotly.js** (https://cdn.plot.ly/plotly-2.24.1.min.js) for Scatter, Histograms, and complex Time-Series.
-   - Use **Chart.js** (https://cdn.jsdelivr.net/npm/chart.js) for simple Bar or Line charts.
-3. **FAIL-SAFE PARSING**: You MUST include this helper function in your script:
-   ```javascript
-   function parseCSV(csv) {
-     const lines = csv.trim().split('\\n');
-     const headers = lines[0].split(',');
-     return lines.slice(1).map(line => {
-       const values = line.split(',');
-       return headers.reduce((obj, header, i) => {
-         obj[header.trim()] = isNaN(values[i]) ? values[i].trim() : parseFloat(values[i]);
-         return obj;
-       }, {});
-     });
-   }
-   ```
-4. **STRICT AXIS TITLES**: Label X and Y axes using EXACT column headers from the CSV.
-5. **DOM READY**: Wrap everything in `document.addEventListener('DOMContentLoaded', ... )`.
-
-Return ONLY the raw HTML code block. No explanations.
-"""
-        user_prompt = f"""
-DATA CONTEXT:
-{context_str}
-
-DESIGN INSTRUCTIONS (Follow Strictly):
-{design_prompt}
-
-Generate the full HTML code now.
-"""
-        from langchain_core.messages import HumanMessage, SystemMessage
-        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
-        response = llm.invoke(messages)
-        html_code = response.content.strip()
-        
-        # Robust Cleanup using regex
-        import re
-        html_match = re.search(r'```html\n(.*?)```', html_code, re.DOTALL)
-        if not html_match:
-            html_match = re.search(r'```(.*?)```', html_code, re.DOTALL)
-        
-        if html_match:
-            html_code = html_match.group(1).strip()
-        
-        return html_code
-    except Exception as e:
-        return f"Code generation failed: {e}"
 
 @tool
 def run_linear_regression(target_col: str, feature_cols: list[str]) -> str:
@@ -523,15 +354,13 @@ def generate_combined_insights(dfs, api_key):
     Generates structured insights grouped by table, including cross-table relationships.
     """
     try:
-        # 2. Init LLM
-        # Use key from session state or fallback to env
-        graph_api_key = st.session_state.get("api_key", os.getenv("OPENROUTER_API_KEY", "sk-or-v1-PLACEHOLDER"))
-        if graph_api_key.startswith("sk-or-"):
+        # Robust LLM Init based on Key
+        if api_key.startswith("sk-or-"):
             from langchain_openai import ChatOpenAI
-            llm = ChatOpenAI(model="google/gemini-3-flash-preview", api_key=graph_api_key, base_url="https://openrouter.ai/api/v1", temperature=0.2)
+            llm = ChatOpenAI(model="nvidia/nemotron-3-nano-30b-a3b:free", api_key=api_key, base_url="https://openrouter.ai/api/v1", temperature=0.3)
         else:
             from langchain_nvidia_ai_endpoints import ChatNVIDIA
-            llm = ChatNVIDIA(model="meta/llama-3.1-70b-instruct", nvidia_api_key=graph_api_key, temperature=0.3)
+            llm = ChatNVIDIA(model="meta/llama-3.1-70b-instruct", nvidia_api_key=api_key, temperature=0.3)
         
         context = ""
         for name, df in dfs.items():
@@ -711,17 +540,8 @@ def main():
     
     # --- Sidebar ---
     with st.sidebar:
-        # 1. Try Streamlit Secrets first (Cloud)
-        api_key = st.secrets.get("OPENROUTER_API_KEY")
-        
-        # 2. Try Environment Variables
-        if not api_key:
-            api_key = os.getenv("OPENROUTER_API_KEY")
-            
-        # 3. Fallback to placeholder (will require manual entry in sidebar if not set)
-        if not api_key:
-            api_key = "sk-or-v1-PLACEHOLDER" # Masked placeholder
-            
+        # Secure API Key Loading
+        api_key = os.getenv("OPENROUTER_API_KEY", "your-openrouter-key-here")
         st.session_state.api_key = api_key
 
         st.header("Data Source")
@@ -801,7 +621,12 @@ def main():
                     st.write(f"**AI Insights for {name}:**")
                     st.markdown(summary)
                     st.divider()
-            
+            # 1. Check for Custom Styled Message (Light Red Instruction)
+            if msg.get("custom_styled_msg"):
+                st.markdown(f'<div style="color: #ff4b4b; background-color: #ffeaea; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; border: 1px solid #ffcaca;">{msg["content"]}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(msg["content"])
+
             # 2. Results CSV Download
             if "result_csv_data" in msg:
                 st.download_button(
@@ -817,12 +642,16 @@ def main():
             # 3. Interactive Graphs
             if "plot_html" in msg:
                 components.html(msg["plot_html"], height=500, scrolling=True)
+                # Rename button to DOWNLOAD GRAPH for dash history
+                btn_label = "DOWNLOAD GRAPH" if msg.get("custom_styled_msg") else "Download Chart (HTML)"
                 st.download_button(
-                    label="Download Chart (HTML)",
+                    label=btn_label,
                     data=msg["plot_html"],
-                    file_name="visualization.html",
+                    file_name="dashboard.html" if msg.get("custom_styled_msg") else "visualization.html",
                     mime="text/html",
-                    key=f"dl_plot_{i}_{len(msg['plot_html'])}"
+                    type="primary" if msg.get("custom_styled_msg") else "secondary",
+                    key=f"dl_plot_{i}_{len(msg['plot_html'])}",
+                    use_container_width=True
                 )
             
     # Render Plots (Top level / History)
@@ -844,11 +673,6 @@ def main():
                 with st.spinner(f"Processing in {agent_mode} mode..."):
                     try:
                         msg_already_appended = False
-                        
-                        # Validate API Key before proceeding
-                        if "PLACEHOLDER" in api_key:
-                            st.error("Invalid API Key. Please set 'OPENROUTER_API_KEY' in Streamlit Secrets or as an environment variable.")
-                            st.stop()
                         # Init LLM
                         if api_key.startswith("sk-or-"):
                             from langchain_openai import ChatOpenAI
@@ -903,31 +727,101 @@ def main():
                                 # Clean up handled by overwrite next time or explicit delete if desired
                             
                         elif agent_mode == "Generate Graphs":
-                            # THREE-STEP LINEAR FLOW (Extraction -> Architect -> Coder)
-                            schema_context = get_schema_context(st.session_state.dfs)
+                            # MINIMALIST DASHBOARD WORKFLOW (Direct to HTML with Client-Side Support)
+                            context_str = ""
+                            for name, d in st.session_state.dfs.items():
+                                buffer = io.StringIO()
+                                d.info(buf=buffer)
+                                df_info = buffer.getvalue()
+                                # Use high-density samples for initial aggregation
+                                head_csv = d.head(100).to_csv(index=False)
+                                context_str += f"\n--- TABLE: {name} (Shape: {d.shape}) ---\n"
+                                context_str += f"SCHEMA & INFO:\n{df_info}\n"
+                                context_str += f"SAMPLE DATA (CSV):\n{head_csv}\n"
 
-                            with st.spinner("Analyzing dataset via SQL..."):
-                                # Step 1: Extraction (SQL logic)
-                                aggregated_data = extract_data_for_graph(prompt, schema_context, api_key)
+                            progress_bar = st.progress(0, text="Generating graph")
+                            import time
+                            for percent_complete in range(100):
+                                time.sleep(0.01)
+                                progress_bar.progress(percent_complete + 1, text="Generating graph")
                                 
-                                # Step 2: Design
-                                design_spec = generate_graph_design_prompt(prompt, aggregated_data, api_key)
-                                
-                                # Step 3: Code (Using aggregated data as the data source)
-                                html_plot = generate_graph_from_design(design_spec, aggregated_data, api_key)
+                            # Force the user-requested model and specific API key
+                            graph_api_key = os.getenv("GRAPH_API_KEY", "your-graph-api-key-here")
+                            if graph_api_key.startswith("sk-or-"):
+                                from langchain_openai import ChatOpenAI
+                                llm_graph = ChatOpenAI(model="google/gemini-3-flash-preview", api_key=graph_api_key, base_url="https://openrouter.ai/api/v1", temperature=0.3)
+                            else:
+                                from langchain_openai import ChatOpenAI
+                                llm_graph = ChatOpenAI(model="google/gemini-3-flash-preview", api_key=graph_api_key)
+
+                            system_prompt = """You are a DataArchitect and Principal Architect.
                             
-                            output = "High-quality visualization generated from full dataset analysis!"
-                            st.markdown(output)
-                            components.html(html_plot, height=500, scrolling=True)
+                            OBJECTIVE: Transform raw dataset into a premium, minimalist, single-file HTML dashboard.
+                            
+                            STRICT UI/UX REQUIREMENTS:
+                            - NO HEADINGS: Do NOT include any branding headings like 'Health Analytics', 'v1.0', or 'Principal Architect' in the HTML.
+                            - CLEANLINESS: REMOVE all subheadings and section headers. Keep the layout extremely minimalist and clutter-free.
+                            - Sidebar: Sleek Sidebar for data management.
+                            - Main Area: Large Main Area for visualization.
+                            - Typography: High-legibility (Inter or Plus Jakarta Sans).
+                            - COMPONENTS: 
+                                - Exactly ONE main graph (Bar, Line, etc.).
+                                - Exactly TWO clean summary data cards.
+                                - A clear Upload/Switch Data function supporting CSV and XLSX.
+                            - STYLING: Subtle gradients, rounded-2xl corners, glassmorphism.
+                            
+                            MANDATORY TECHNICAL CONSTRAINTS:
+                            1. Output exactly ONE standalone .html file.
+                            2. Include these libraries via CDN in <head>: Tailwind CSS, Chart.js, PapaParse, SheetJS.
+                            3. HYBRID LOADING: Pre-aggregate the data into `const initialData`.
+                            4. BROWSER-ONLY PROCESSING: All parsing for NEW uploads happens client-side.
+                            
+                            Return ONLY the raw HTML. No explanations."""
+
+                            user_prompt = f"""
+                            User Question: "{prompt}"
+                            
+                            DATA CONTEXT:
+                            {context_str}
+                            
+                            Generate the ultra-clean premium dashboard (NO HEADINGS) now.
+                            """
+                            messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+                            response = llm_graph.invoke(messages)
+                            html_plot = response.content.strip()
+
+                            # Cleanup
+                            import re
+                            html_match = re.search(r'```html\n(.*?)```', html_plot, re.DOTALL) or re.search(r'```(.*?)```', html_plot, re.DOTALL)
+                            if html_match:
+                                html_plot = html_match.group(1).strip()
+                            
+                            progress_bar.empty()
+                            
+                            # 1. Light Red Instruction at the Top
+                            output_msg = "Please upload the data set below to get the accurate results"
+                            st.markdown(f'<div style="color: #ff4b4b; background-color: #ffeaea; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; border: 1px solid #ffcaca;">{output_msg}</div>', unsafe_allow_html=True)
+                            
+                            # 2. Graph Rendering
+                            components.html(html_plot, height=600, scrolling=True)
+                            
+                            # 3. DOWNLOAD GRAPH Button below the graph
                             st.download_button(
-                                label="Download Chart (HTML)",
+                                label="DOWNLOAD GRAPH",
                                 data=html_plot,
-                                file_name="visualization.html",
+                                file_name="dashboard.html",
                                 mime="text/html",
-                                key=f"dl_immediate_plot_{len(html_plot)}"
+                                type="primary",
+                                key=f"dl_dash_{len(html_plot)}",
+                                use_container_width=True
                             )
                             
-                            st.session_state.messages.append({"role": "assistant", "content": output, "plot_html": html_plot})
+                            st.session_state.messages.append({
+                                "role": "assistant", 
+                                "content": output_msg, 
+                                "plot_html": html_plot,
+                                "custom_styled_msg": True # Flag for history rendering
+                            })
                             msg_already_appended = True
                             
                         else:
