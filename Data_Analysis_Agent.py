@@ -609,7 +609,7 @@ def main():
 
     for i, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+            # Content is rendered below in the styled/unstyled logic block
             
             # 1. Onboarding Snapshots
             if msg["role"] == "assistant" and msg.get("is_onboarding"):
