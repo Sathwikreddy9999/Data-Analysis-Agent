@@ -791,7 +791,7 @@ def main():
                             html_plot = response.content.strip()
 
                             # Cleanup
-                            import re
+
                             html_match = re.search(r'```html\n(.*?)```', html_plot, re.DOTALL) or re.search(r'```(.*?)```', html_plot, re.DOTALL)
                             if html_match:
                                 html_plot = html_match.group(1).strip()
