@@ -115,5 +115,28 @@ def apply_apple_style():
             box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
         
+        /* HIDE CHAT AVATARS */
+        [data-testid="stChatMessageAvatarBackground"] {
+            display: none !important;
+        }
+        /* Adjust padding since avatar is gone */
+        [data-testid="stChatMessageContent"] {
+            margin-left: 0 !important;
+            padding-left: 0 !important;
+            border: 1px solid #d0e3ff; /* AI: Light blue outline */
+            border-left: 4px solid #0071e3; /* AI: Blue border accent */
+            padding: 10px 15px;
+            background-color: #ffffff; /* AI: White background (No tint) */
+            border-radius: 8px;
+            color: #1d1d1f;
+        }
+        /* Make user message distinct (White) */
+        div[data-testid="stChatMessage"]:nth-child(even) [data-testid="stChatMessageContent"] {
+             background-color: #ffffff; /* Human: White background */
+             border-left-color: #e5e5e5; /* Human: Grey/Subtle border */
+             border: 1px solid #f0f0f0; /* Optional: Slight border definition */
+             border-left-width: 4px; /* Maintain left accent width */
+        }
+        
         </style>
     """, unsafe_allow_html=True)

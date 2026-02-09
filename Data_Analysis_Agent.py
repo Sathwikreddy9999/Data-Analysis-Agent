@@ -24,6 +24,9 @@ from langchain_core.tools import tool
 from langchain.agents import AgentExecutor, create_json_chat_agent, create_react_agent
 from langchain_core.prompts import PromptTemplate
 from style_utils import apply_apple_style
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- TOOLS for ReAct Agents ---
 
@@ -67,10 +70,11 @@ def generate_interactive_html(user_request: str) -> str:
     Use ONLY for requests to "plot", "graph", "chart", "visualize".
     """
     if "dfs" not in st.session_state or not st.session_state.dfs: return "No data."
-    if "api_key" not in st.session_state: return "No API key found."
+    if "openrouter_key" not in st.session_state: return "No API key found."
     
     dfs = st.session_state.dfs
-    api_key = st.session_state.api_key
+    # We ignore general key, we need specific graph key
+    # api_key = st.session_state.api_key
     
     try:
         # 1. Prepare Rich Data Context
@@ -85,7 +89,9 @@ def generate_interactive_html(user_request: str) -> str:
             context_str += f"SAMPLE DATA (CSV):\n{head_csv}\n"
         
         # 2. Init LLM
-        graph_api_key = os.getenv("GRAPH_API_KEY", "your-graph-api-key-here")
+        graph_api_key = st.session_state.get("openrouter_key", "")
+        if not graph_api_key:
+             return "Error: OpenRouter API Key missing. Please configure in sidebar."
         if graph_api_key.startswith("sk-or-"):
             from langchain_openai import ChatOpenAI
             llm = ChatOpenAI(model="google/gemini-3-flash-preview", api_key=graph_api_key, base_url="https://openrouter.ai/api/v1", temperature=0.2)
@@ -355,7 +361,7 @@ def generate_combined_insights(dfs, api_key):
     """
     try:
         # Robust LLM Init based on Key
-        if api_key.startswith("sk-or-"):
+        if api_key.startswith("sk-or-") and not api_key.startswith("nvapi-"):
             from langchain_openai import ChatOpenAI
             llm = ChatOpenAI(model="nvidia/nemotron-3-nano-30b-a3b:free", api_key=api_key, base_url="https://openrouter.ai/api/v1", temperature=0.3)
         else:
@@ -460,56 +466,56 @@ def render_analysis_plots():
 # --- Static Content for Walkthrough ---
 MODE_INFO = {
     "SQL Code": {
-        "download_note": "**Tip**: After the query is generated, you can click the button below to execute it and download the results as a CSV.",
+        "download_note": "**Pro Tip**: Upload multiple datasets (CSV/XLSX) to perform complex joins. Execute queries and download results instantly.",
         "use_cases": [
-            "Enter 'Show all columns from orders' to get a clean SELECT query.",
-            "Enter 'Join orders with users on userId' to get a relational join query.",
-            "Enter 'Total sales by month' to get a GROUP BY SQL query.",
-            "Enter 'Filter users older than 25' to get a WHERE clause query.",
-            "Enter 'Top 10 products by price' to get an ORDER BY LIMIT query.",
-            "Enter 'List distinct cities from users' to get a SELECT DISTINCT query."
+            "Join Tables (INNER/LEFT/OUTER)",
+            "Group By Aggregations",
+            "Top N Records (ORDER BY)",
+            "Complex Filtering (WHERE/HAVING)",
+            "Distinct Value Listings",
+            "**Many More**: Subqueries, Window Funcs, CTEs, Date Math"
         ]
     },
     "Python Code": {
-        "download_note": "**Tip**: After the code is generated, you can click the button below to run it and download the processed data as a CSV.",
+        "download_note": "**Pro Tip**: Build advanced predictive models (Regression, Neural Networks). Run the code and download the prediction dataset.",
         "use_cases": [
-            "Enter 'Calculate rolling 7-day average of sales' to get pandas rolling mean code.",
-            "Enter 'Handle missing values in price column' to get imputer/fillna code.",
-            "Enter 'Create a new column profit = sales - cost' to get column assignment code.",
-            "Enter 'Group by category and sum quantity' to get groupby aggregate code.",
-            "Enter 'Normalize the age column' to get MinMaxScaler/StandardScaler code.",
-            "Enter 'Sort data by date and reset index' to get sort_values and reset_index code."
+            "Predictive Modeling (RF, XGBoost)",
+            "Linear/Logistic Regression",
+            "Neural Networks / Deep Learning",
+            "Advanced Data Cleaning/Imputation",
+            "Clustering (K-Means/DBSCAN)",
+            "**Many More**: NLP, Time Series, Feature Eng., APIs"
         ]
     },
     "R Code": {
-        "download_note": "**Tip**: After the R code is generated, you can click the button below to perform the operation and download the result as a CSV.",
+        "download_note": "**Pro Tip**: Build advanced predictive models (Regression, Neural Networks). Run the code and download the prediction dataset.",
         "use_cases": [
-            "Enter 'Select columns date and sales' to get dplyr select code.",
-            "Enter 'Filter for rows where sales > 100' to get filter() code.",
-            "Enter 'Mutate a new column total=qty*price' to get mutate() code.",
-            "Enter 'Summarize mean price by group' to get summarize() code.",
-            "Enter 'Arrange by descending date' to get arrange(desc()) code.",
-            "Enter 'Pivot data to wide format' to get pivot_wider() code."
+            "dplyr Data Manipulation",
+            "ggplot2 Visualization Code",
+            "Statistical Tests (t-test, ANOVA)",
+            "Time Series Analysis (Arima)",
+            "Machine Learning (Caret/Tidymodels)",
+            "**Many More**: Shiny Apps, Markdown, BioConductor"
         ]
     },
     "Ask Questions": {
         "use_cases": [
-            "Enter 'What is the average price of items?' to get a numeric answer.",
-            "Enter 'Summarize the key trends in my data' to get a high-level AI analysis.",
-            "Enter 'Run a linear regression for Sales vs Price' to get statistical model results.",
-            "Enter 'Is there a correlation between Age and Spend?' to get a correlation matrix.",
-            "Enter 'Find the best classification model for target Churn' to get AutoML results.",
-            "Enter 'Predict the next month's demand' to get a forecasting/regression output."
+            "Instant Numeric Answers",
+            "Trend Interpretation",
+            "Correlation Analysis",
+            "Statistical Significance",
+            "Predictive Q&A",
+            "**Many More**: Logic Puzzles, What-If Scenarios, Explanations"
         ]
     },
     "Generate Graphs": {
         "use_cases": [
-            "Enter 'Plot a bar chart of sales per region' to get an interactive bar graph.",
-            "Enter 'Show me the distribution of customer ages' to get a histogram.",
-            "Enter 'Generate a line graph for monthly revenue' to get a time-series plot.",
-            "Enter 'Create a scatter plot for Budget vs ROI' to get a relationship chart.",
-            "Enter 'Show a heat map of correlations' to get a visual matrix.",
-            "Enter 'Plot a pie chart of market share' to get a compositional visualization."
+            "Bar & Column Charts",
+            "Line & Area Charts",
+            "Scatter & Bubble Plots",
+            "Histograms & Box Plots",
+            "Heatmaps & Correlation Matrix",
+            "**Many More**: Violin, Treemaps, 3D Plots, Geospatial"
         ]
     }
 }
@@ -519,14 +525,108 @@ def main():
     apply_apple_style()
     st.title("Data Analysis Agent")
 
-    # --- Quick Start Guide (Always Visible) ---
-    with st.expander("Quick Start Guide", expanded=True):
+    # --- Quick Start Guide (Revamped Tile Layout) ---
+    st.markdown("""
+    <style>
+    .step-card {
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        height: 100%;
+        min-height: 140px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .step-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+        border-color: #0071e3;
+    }
+    .step-number {
+        font-size: 28px;
+        font-weight: 700;
+        color: #0071e3;
+        margin-bottom: 10px;
+        display: block;
+    }
+    .step-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #1d1d1f;
+        margin-bottom: 5px;
+        display: block;
+    }
+    .step-desc {
+        font-size: 13px;
+        color: #86868b;
+    }
+    .use-case-card {
+        background-color: #ffffff;
+        border: 1px solid #e1e4e8;
+        border-radius: 10px;
+        padding: 15px;
+        border-left: 4px solid #0071e3;
+        text-align: left;
+        height: 100%;
+        min-height: 100px;
+        display: flex;
+        align-items: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+        transition: all 0.2s ease;
+    }
+    .use-case-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.08);
+        border-color: #0071e3;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    c1, c2, c3, c4 = st.columns(4)
+    
+    with c1:
         st.markdown("""
-        1. **STEP 1:** **Select your Mode** in the sidebar.
-        2. **STEP 2:** **Add your Data** (CSV or XLSX) via the uploader in the sidebar.
-        3. **STEP 3:** **Type your request** in the chat box below.
-        4. **STEP 4:** **Hit Enter** to generate your result!
-        """)
+        <div class="step-card">
+            <span class="step-number">1</span>
+            <span class="step-title">Select Mode</span>
+            <span class="step-desc">Choose analysis type from sidebar</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with c2:
+        st.markdown("""
+        <div class="step-card">
+            <span class="step-number">2</span>
+            <span class="step-title">Add Data</span>
+            <span class="step-desc">Upload CSV or XLSX files</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with c3:
+        st.markdown("""
+        <div class="step-card">
+            <span class="step-number">3</span>
+            <span class="step-title">Type Request</span>
+            <span class="step-desc">Ask questions about your data</span>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with c4:
+        st.markdown("""
+        <div class="step-card">
+            <span class="step-number">4</span>
+            <span class="step-title">Hit Enter</span>
+            <span class="step-desc">Get instant AI insights</span>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.divider()
 
     # --- Session State ---
     if "messages" not in st.session_state:
@@ -540,9 +640,20 @@ def main():
     
     # --- Sidebar ---
     with st.sidebar:
-        # Secure API Key Loading
-        api_key = os.getenv("OPENROUTER_API_KEY", "your-openrouter-key-here")
-        st.session_state.api_key = api_key
+        # API Configuration (Hidden)
+        # API Configuration (Hidden)
+        openrouter_key = os.getenv("GRAPH_API_KEY", "")
+        nvidia_key = os.getenv("NVIDIA_API_KEY", "")
+        
+        st.session_state.openrouter_key = openrouter_key
+        st.session_state.nvidia_key = nvidia_key
+        
+        # LOGIC SPLIT:
+        # - Analysis uses Nvidia Key if available, else falls back to OpenRouter
+        # - Graphs use OpenRouter Key
+        
+        analysis_key = nvidia_key if nvidia_key else openrouter_key
+        st.session_state.analysis_key = analysis_key
 
         st.header("Data Source")
         uploaded_files = st.file_uploader("Upload CSV or XLSX", type=["csv", "xlsx"], accept_multiple_files=True)
@@ -566,7 +677,8 @@ def main():
                 st.success(f"Loaded {len(st.session_state.dfs)} datasets.")
                 # AUTO-AI INSIGHTS IN CHAT
                 with st.spinner("Analyzing data..."):
-                    summaries = generate_combined_insights(st.session_state.dfs, api_key)
+                    # Use analysis_key for insights
+                    summaries = generate_combined_insights(st.session_state.dfs, st.session_state.analysis_key)
                     
                     # Store onboarding report as a message
                     st.session_state.messages.append({
@@ -601,11 +713,15 @@ def main():
     if "last_mode" not in st.session_state or st.session_state.last_mode != agent_mode:
         st.session_state.last_mode = agent_mode
         mode_data = MODE_INFO[agent_mode]
-        intro_msg = f"Switched to **{agent_mode}** mode.\n\n"
-        if "download_note" in mode_data:
-             intro_msg += f"{mode_data['download_note']}\n\n"
-        intro_msg += f"**Example Use Cases:**\n- " + "\n- ".join(mode_data['use_cases'])
-        st.session_state.messages.append({"role": "assistant", "content": intro_msg})
+        intro_msg = f"Switched to **{agent_mode}** mode."
+        
+        st.session_state.messages.append({
+            "role": "assistant", 
+            "content": intro_msg, 
+            "is_mode_intro": True,
+            "mode_name": agent_mode,
+            "mode_data": mode_data
+        })
 
     for i, msg in enumerate(st.session_state.messages):
         with st.chat_message(msg["role"]):
@@ -621,8 +737,33 @@ def main():
                     st.write(f"**AI Insights for {name}:**")
                     st.markdown(summary)
                     st.divider()
-            # 1. Check for Custom Styled Message (Light Red Instruction)
-            if msg.get("custom_styled_msg"):
+            # 1. Custom Styled Message (Light Red Instruction)
+            if msg.get("is_mode_intro"):
+                mode_data = msg["mode_data"]
+                
+                # 1. Full Width Tip Card (Blue Accent)
+                st.markdown(f"""
+                <div class="step-card" style="text-align: left; align-items: flex-start; padding: 25px; min-height: auto; margin-bottom: 20px; background-color: #f0f7ff; border: 1px solid #d0e3ff;">
+                    <span class="step-number" style="font-size: 20px; margin-bottom: 10px; color: #0071e3;">Pro Tip</span>
+                    <div class="step-desc" style="font-size: 16px; color: #003a70; line-height: 1.5;">
+                        {mode_data.get('download_note', 'Explore the capabilities of this mode.')}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                # 2. Use Cases (Single Tile)
+                st.markdown("##### Example Use Cases")
+                use_cases_html = "".join([f'<li style="margin-bottom: 4px;">{uc}</li>' for uc in mode_data['use_cases']])
+                
+                st.markdown(f"""
+                <div class="use-case-card" style="display: block; min-height: auto; padding: 15px;">
+                    <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #1d1d1f; line-height: 1.4;">
+                        {use_cases_html}
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True)
+
+            elif msg.get("custom_styled_msg"):
                 st.markdown(f'<div style="color: #ff4b4b; background-color: #ffeaea; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; border: 1px solid #ffcaca;">{msg["content"]}</div>', unsafe_allow_html=True)
             else:
                 st.markdown(msg["content"])
@@ -673,14 +814,28 @@ def main():
                 with st.spinner(f"Processing in {agent_mode} mode..."):
                     try:
                         msg_already_appended = False
-                        # Init LLM
-                        if api_key.startswith("sk-or-"):
-                            from langchain_openai import ChatOpenAI
-                            llm = ChatOpenAI(model="nvidia/nemotron-3-nano-30b-a3b:free", api_key=api_key, base_url="https://openrouter.ai/api/v1")
-                        else:
-                            from langchain_nvidia_ai_endpoints import ChatNVIDIA
-                            llm = ChatNVIDIA(model="meta/llama-3.1-70b-instruct", nvidia_api_key=api_key)
                         
+                        # SHARED LLM INIT (For Verification & Code Gen)
+                        # We use the analysis_key (Prefer Nvidia) for general reasoning and code gen
+                        current_key = st.session_state.analysis_key
+                        
+                        # Check block for non-graph modes
+                        if agent_mode != "Generate Graphs":
+                            if not current_key:
+                                st.error("No API Key available for analysis. Please check sidebar.")
+                                st.stop()
+                        
+                        llm = None
+                        if agent_mode != "Generate Graphs":
+                            if current_key.startswith("sk-or-") and not current_key.startswith("nvapi-"):
+                                from langchain_openai import ChatOpenAI
+                                # Fallback/Alternative on OpenRouter
+                                llm = ChatOpenAI(model="nvidia/nemotron-3-nano-30b-a3b:free", api_key=current_key, base_url="https://openrouter.ai/api/v1")
+                            else:
+                                from langchain_nvidia_ai_endpoints import ChatNVIDIA
+                                # Use Nvidia NIM directly
+                                llm = ChatNVIDIA(model="meta/llama-3.1-70b-instruct", nvidia_api_key=current_key)
+
                         # INTERACTIONS
                         if agent_mode == "Ask Questions":
                             # INTERACTIVE MODE - Calculations & Modeling Focus
@@ -746,7 +901,10 @@ def main():
                                 progress_bar.progress(percent_complete + 1, text="Generating graph")
                                 
                             # Force the user-requested model and specific API key
-                            graph_api_key = os.getenv("GRAPH_API_KEY", "your-graph-api-key-here")
+                            graph_api_key = st.session_state.get("openrouter_key", "")
+                            if not graph_api_key:
+                                st.error("No OpenRouter API Key found. Please check sidebar.")
+                                st.stop()
                             if graph_api_key.startswith("sk-or-"):
                                 from langchain_openai import ChatOpenAI
                                 llm_graph = ChatOpenAI(model="google/gemini-3-flash-preview", api_key=graph_api_key, base_url="https://openrouter.ai/api/v1", temperature=0.3)
@@ -902,7 +1060,12 @@ def main():
             with st.spinner("Executing and Generating Results..."):
                 try:
                     # Re-Init resources
-                    if api_key.startswith("sk-or-"):
+                    api_key = st.session_state.get("analysis_key", "")
+                    if not api_key:
+                        st.error("No API Key found. Please check sidebar.")
+                        st.stop()
+                        
+                    if api_key.startswith("sk-or-") and not api_key.startswith("nvapi-"):
                          from langchain_openai import ChatOpenAI
                          llm_code = ChatOpenAI(model="meta-llama/llama-3.1-70b-instruct", api_key=api_key, base_url="https://openrouter.ai/api/v1", temperature=0)
                     else:
