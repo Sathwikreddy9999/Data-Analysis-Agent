@@ -123,7 +123,6 @@ def apply_apple_style():
         [data-testid="stChatMessageContent"] {
             margin-left: 0 !important;
             padding-left: 0 !important;
-            border: 1px solid #d0e3ff; /* AI: Light blue outline */
             border-left: 4px solid #0071e3; /* AI: Blue border accent */
             padding: 10px 15px;
             background-color: #ffffff; /* AI: White background (No tint) */

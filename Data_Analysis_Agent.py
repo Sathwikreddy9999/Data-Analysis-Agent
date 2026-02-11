@@ -466,36 +466,36 @@ def render_analysis_plots():
 # --- Static Content for Walkthrough ---
 MODE_INFO = {
     "SQL Code": {
-        "download_note": "**Pro Tip**: Upload multiple datasets (CSV/XLSX) to perform complex joins. Execute queries and download results instantly.",
+        "download_note": "Pro Tip: Upload multiple datasets (CSV/XLSX) to perform complex joins. Execute queries and download results instantly.",
         "use_cases": [
             "Join Tables (INNER/LEFT/OUTER)",
             "Group By Aggregations",
             "Top N Records (ORDER BY)",
             "Complex Filtering (WHERE/HAVING)",
             "Distinct Value Listings",
-            "**Many More**: Subqueries, Window Funcs, CTEs, Date Math"
+            "Many More: Subqueries, Window Funcs, CTEs, Date Math"
         ]
     },
     "Python Code": {
-        "download_note": "**Pro Tip**: Build advanced predictive models (Regression, Neural Networks). Run the code and download the prediction dataset.",
+        "download_note": "Pro Tip: Build advanced predictive models (Regression, Neural Networks). Run the code and download the prediction dataset.",
         "use_cases": [
             "Predictive Modeling (RF, XGBoost)",
             "Linear/Logistic Regression",
             "Neural Networks / Deep Learning",
             "Advanced Data Cleaning/Imputation",
             "Clustering (K-Means/DBSCAN)",
-            "**Many More**: NLP, Time Series, Feature Eng., APIs"
+            "Many More: NLP, Time Series, Feature Eng., APIs"
         ]
     },
     "R Code": {
-        "download_note": "**Pro Tip**: Build advanced predictive models (Regression, Neural Networks). Run the code and download the prediction dataset.",
+        "download_note": "Pro Tip: Build advanced predictive models (Regression, Neural Networks). Run the code and download the prediction dataset.",
         "use_cases": [
             "dplyr Data Manipulation",
             "ggplot2 Visualization Code",
             "Statistical Tests (t-test, ANOVA)",
             "Time Series Analysis (Arima)",
             "Machine Learning (Caret/Tidymodels)",
-            "**Many More**: Shiny Apps, Markdown, BioConductor"
+            "Many More: Shiny Apps, Markdown, BioConductor"
         ]
     },
     "Ask Questions": {
@@ -505,7 +505,7 @@ MODE_INFO = {
             "Correlation Analysis",
             "Statistical Significance",
             "Predictive Q&A",
-            "**Many More**: Logic Puzzles, What-If Scenarios, Explanations"
+            "Many More: Logic Puzzles, What-If Scenarios, Explanations"
         ]
     },
     "Generate Graphs": {
@@ -515,7 +515,7 @@ MODE_INFO = {
             "Scatter & Bubble Plots",
             "Histograms & Box Plots",
             "Heatmaps & Correlation Matrix",
-            "**Many More**: Violin, Treemaps, 3D Plots, Geospatial"
+            "Many More: Violin, Treemaps, 3D Plots, Geospatial"
         ]
     }
 }
@@ -655,8 +655,8 @@ def main():
         analysis_key = nvidia_key if nvidia_key else openrouter_key
         st.session_state.analysis_key = analysis_key
 
-        st.header("Data Source")
-        uploaded_files = st.file_uploader("Upload CSV or XLSX", type=["csv", "xlsx"], accept_multiple_files=True)
+        st.markdown("<h3 style='color: #0071e3; font-weight: 600; margin-bottom: 10px;'>📂 Upload Dataset</h3>", unsafe_allow_html=True)
+        uploaded_files = st.file_uploader("Upload CSV or XLSX", type=["csv", "xlsx"], accept_multiple_files=True, label_visibility="collapsed")
         
         if uploaded_files:
             if "dfs" not in st.session_state: st.session_state.dfs = {}
@@ -692,11 +692,12 @@ def main():
 
         st.divider()
 
-        st.header("Mode Selection")
+        st.markdown("<h3 style='color: #0071e3; font-weight: 600; margin-bottom: 10px; margin-top: 10px;'>Select Mode</h3>", unsafe_allow_html=True)
         # 5 Options as requested
         agent_mode = st.radio(
             "Select Agent Mode:",
-            ["SQL Code", "Python Code", "R Code", "Ask Questions", "Generate Graphs"]
+            ["SQL Code", "Python Code", "R Code", "Ask Questions", "Generate Graphs"],
+            label_visibility="collapsed"
         )
         
         st.divider()
